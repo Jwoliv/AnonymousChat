@@ -26,4 +26,6 @@ public class User implements BaseEntity {
     private Long reputation;
     @ElementCollection
     private List<Report> reports = new ArrayList<>();
+    @Transient
+    private Long opponentChatId;
 }
