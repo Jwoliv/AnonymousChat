@@ -4,15 +4,17 @@ import com.example.AnonymousChat.model.Session;
 import com.example.AnonymousChat.model.User;
 import com.example.AnonymousChat.service.UserService;
 import com.example.AnonymousChat.util.MessageSender;
+import com.example.AnonymousChat.util.MessagesText;
 import com.example.AnonymousChat.util.UserComparator;
+import com.example.AnonymousChat.util.builder.KeyboardBuilder;
+import com.example.AnonymousChat.util.builder.MessageBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.List;
 import java.util.Set;
@@ -58,72 +60,70 @@ public class AnonChatBot extends TelegramLongPollingBot {
             var text = msg.getText();
             var currentUser = userService.findByChatId(chatId);
 
-            if (text.equals("/start")) {
-                processingCmdStart(chatId);
+            if (currentUser.getPreviousChatId() != null) {
+                changeReputation(chatId, text, currentUser);
             }
-            else {
-                if (text.equals("/new")) {
-                    newConversation(chatId);
-                }
-                else if (text.equals("/stop")) {
-                    stopConversation(chatId);
-                }
-                else if (text.equals("/share")) {
-                    if (currentUser.getOpponentChatId() != null) {
-                        var username = msg.getFrom().getUserName();
-                        msgSender.sendText(currentUser.getOpponentChatId(), String.format("""
-                                The user shared own username:
-                                @%s it's username :)
-                                Maybe you want to continue the conversation later
-                                """, username));
-                    }
-                }
-                else if (currentUser != null) {
-                    var opponentChatId = chatId; //TODO: Change chatID of the opponent `currentUser.getOpponentChatId()`
-                    if (msg.hasText()) {
-                        SendMessage message = new SendMessage(String.valueOf(opponentChatId), text);
-                        try {
-                            execute(message);
-                        } catch (TelegramApiException e) {
-                            e.printStackTrace();
-                        }
-                    }
 
-                }
+            switch (text) {
+                case "/start" -> processingCmdStart(chatId, currentUser);
+                case "/new" -> newConversation(chatId);
+                case "/stop" -> stopConversation(chatId);
+                case "/share" -> processingCmdShare(currentUser, msg);
             }
-        } else if (update != null) {
+        } else if (update != null && update.hasMessage()) {
             var msg = update.getMessage();
             var chatId = msg.getChatId();
-
             var currentUser = userService.findByChatId(chatId);
-            if (/*currentUser.getOpponentChatId() != null*/true) { //TODO: Delete the comment
-                var opponentChatId = chatId; //TODO: Change chatID of the opponent `currentUser.getOpponentChatId()`
+            if (currentUser.getOpponentChatId() != null) {
+                var opponentChatId = currentUser.getOpponentChatId();
                 if (msg.hasPhoto()) {
-                    msgSender.sendPhoto(opponentChatId, msg.getPhoto().get(0).getFileId());
+                    msgSender.sendPhoto(opponentChatId, msg);
                 }
                 if (msg.hasVideo()) {
-                    msgSender.sendVideo(opponentChatId, msg.getVideo().getFileId());
+                    msgSender.sendVideo(opponentChatId, msg);
                 }
                 if (msg.hasAnimation()) {
-                    msgSender.sendAnimation(opponentChatId, msg.getAnimation().getFileId());
+                    msgSender.sendAnimation(opponentChatId, msg);
                 }
                 if (msg.hasAudio()) {
-                    msgSender.sendAudio(opponentChatId, msg.getAudio().getFileId());
+                    msgSender.sendAudio(opponentChatId, msg);
                 }
                 if (msg.hasVoice()) {
-                    msgSender.sendVoice(opponentChatId, msg.getVoice().getFileId());
+                    msgSender.sendVoice(opponentChatId, msg);
+                }
+                if (msg.hasText()) {
+                    msgSender.sendText(opponentChatId, msg);
                 }
             }
         }
     }
 
 
-    private synchronized void processingCmdStart(Long chatId) {
-        var user = userService.findByChatId(chatId);
+    private synchronized void changeReputation(Long chatId, String text, User user) {
+        var opponentChatId = user.getPreviousChatId();
+        var opponent = userService.findByChatId(opponentChatId);
+        if (opponent != null) {
+            var reputation = opponent.getReputation();
+            if (text.equals("👍")) {
+                opponent.setReputation(reputation + 1);
+            } else if (text.equals("👎")) {
+                opponent.setReputation(reputation - 1);
+            }
+            user.setPreviousChatId(null);
+            userService.saveAll(List.of(user, opponent));
+            msgSender.sendText(chatId, "Thank you for feedback");
+        }
+        else {
+            msgSender.sendMessage(MessageBuilder.messageOfKeyboard(chatId, MessagesText.errorReputation, KeyboardBuilder.reputationItems));
+        }
+    }
+
+    private synchronized void processingCmdStart(Long chatId, User user) {
         if (user == null) {
             user = User.builder().chatId(chatId).reputation(0L).build();
             userService.save(user);
         }
+        msgSender.sendText(chatId, MessagesText.startMessage);
     }
 
     private synchronized void newConversation(Long chatId) {
@@ -133,22 +133,25 @@ public class AnonChatBot extends TelegramLongPollingBot {
             busyUsers.remove(currentUser);
         }
 
+        msgSender.sendText(chatId, "🔍 Start looking for other user");
+
         if (users.size() == 0) {
             users.add(currentUser);
-            msgSender.sendText(chatId, "Start looking for other user");
         } else {
-            var otherUser = users.stream().findFirst().orElse(null);
-            Session session = Session.builder().firstUser(currentUser).secondUser(otherUser).build();
+            var opponent = users.stream().findFirst().orElse(null);
+            Session session = Session.builder().firstUser(currentUser).secondUser(opponent).build();
 
-            currentUser.setOpponentChatId(otherUser.getChatId());
-            otherUser.setOpponentChatId(currentUser.getChatId());
+            currentUser.setOpponentChatId(opponent.getChatId());
+            opponent.setOpponentChatId(currentUser.getChatId());
 
-            users.remove(otherUser);
+            userService.saveAll(List.of(currentUser, opponent));
+
+            users.remove(opponent);
             sessions.add(session);
-            busyUsers.addAll(List.of(currentUser, otherUser));
+            busyUsers.addAll(List.of(currentUser, opponent));
 
-            msgSender.sendText(currentUser.getChatId(), "Start session");
-            msgSender.sendText(otherUser.getChatId(), "Start session");
+            msgSender.sendText(currentUser.getChatId(), MessagesText.startChat);
+            msgSender.sendText(opponent.getChatId(), MessagesText.startChat);
         }
     }
 
@@ -167,25 +170,49 @@ public class AnonChatBot extends TelegramLongPollingBot {
                 var firstUser = sessionOfUser.getFirstUser();
                 var secondUser = sessionOfUser.getSecondUser();
 
+                firstUser.setPreviousChatId(firstUser.getOpponentChatId());
+                secondUser.setPreviousChatId(secondUser.getOpponentChatId());
+
                 firstUser.setOpponentChatId(null);
                 secondUser.setOpponentChatId(null);
 
-                msgSender.sendText(sessionOfUser.getFirstUser().getChatId(), "The chat was interrupted");
-                msgSender.sendText(sessionOfUser.getSecondUser().getChatId(), "The chat was interrupted");
+                userService.saveAll(List.of(firstUser, secondUser));
+
+                var firstChatId = sessionOfUser.getFirstUser().getChatId();
+                var secondChatId = sessionOfUser.getSecondUser().getChatId();
+                msgSender.sendText(firstChatId, MessagesText.interruptChat);
+                msgSender.sendText(secondChatId, MessagesText.interruptChat);
+
+                msgSender.sendMessage(MessageBuilder.messageOfKeyboard(chatId, MessagesText.msgReputation, KeyboardBuilder.reputationItems));
+                msgSender.sendMessage(MessageBuilder.messageOfKeyboard(chatId, MessagesText.msgReputation, KeyboardBuilder.reputationItems));
+            }
+            else if (users.contains(user)) {
+                users.remove(user);
+                msgSender.sendText(chatId, MessagesText.stopChat);
+            }
+            else {
+                msgSender.sendText(chatId, MessagesText.errorChat);
             }
         }
     }
 
-
-    private synchronized Long findOpponentChatId(Long chatId) {
-        return sessions.stream()
-                .filter(x -> x.getSecondUser().getChatId().equals(chatId) || x.getFirstUser().getChatId().equals(chatId))
-                .findFirst()
-                .map(session ->
-                        session.getFirstUser().getChatId().equals(chatId)
-                        ? session.getSecondUser().getChatId()
-                        : session.getFirstUser().getChatId()
-                ).orElse(null);
+    private synchronized void processingCmdShare(User currentUser, Message msg) {
+        if (currentUser != null && msg != null) {
+            if (currentUser.getOpponentChatId() != null) {
+                var username = msg.getFrom().getUserName();
+                msgSender.sendText(
+                        currentUser.getOpponentChatId(),
+                        String.format("""
+                                🔥 The user shared own username:
+                                😎 It's a @%s
+                                """, username
+                        )
+                );
+            }
+            else {
+                msgSender.sendText(currentUser.getChatId(), "👀 Your is not in the chat! 😕");
+            }
+        }
     }
 
 

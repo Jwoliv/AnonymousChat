@@ -21,6 +21,11 @@ public abstract class BaseService<E extends BaseEntity, R extends BaseRepository
     }
 
     @Transactional
+    public void saveAll(List<E> entities) {
+        repository.saveAll(entities);
+    }
+
+    @Transactional
     public void deleteById(Long id) {
         repository.deleteById(id);
     }

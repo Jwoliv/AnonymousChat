@@ -28,4 +28,6 @@ public class User implements BaseEntity {
     private List<Report> reports = new ArrayList<>();
     @Transient
     private Long opponentChatId;
+    @Transient
+    private Long previousChatId;
 }
