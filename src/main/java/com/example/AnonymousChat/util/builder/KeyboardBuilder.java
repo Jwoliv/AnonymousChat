@@ -9,7 +9,7 @@ import java.util.List;
 
 @Component
 public class KeyboardBuilder {
-    public static List<String> reputationItems = List.of("👍", "👎");
+    public static List<String> reputationItems = List.of("👍", "👎", "🚫");
 
     public static ReplyKeyboardMarkup createKeyboardOfList(List<String> buttons) {
         List<KeyboardRow> keyboardRows = new ArrayList<>();

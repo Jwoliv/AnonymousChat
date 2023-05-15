@@ -13,6 +13,8 @@ public class MessagesText {
     public final static String stopChat = "✅ Chat was stopped";
     public final static String errorChat = "👀 Your is not in the chat! 😕";
     public final static String startChat = "✅ Start chat";
-
-
+    public final static String lookingChat = "🔍 Start looking for other user";
+    public final static String thankMsg = "Thank you for your feedback! 🙏😊";
+    public final static String reportMsg = "Reports of the user 📋👤🔍";
+    public final static String wrongFormatMsg = "Wrong format of the report ❌📋\nPlease try again 🔄🙂";
 }

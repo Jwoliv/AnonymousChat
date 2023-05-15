@@ -1,6 +1,8 @@
 package com.example.AnonymousChat.util;
 
 import com.example.AnonymousChat.bot.AnonChatBot;
+import com.example.AnonymousChat.model.User;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.*;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
@@ -8,6 +10,7 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 @Component
+@Slf4j
 public class MessageSender {
     private final AnonChatBot anonChatBot;
 
@@ -16,8 +19,21 @@ public class MessageSender {
     }
 
 
-    public synchronized void sendMedia() {
-
+    public synchronized void sendBetweenUsers(User currentUser, Message msg) {
+        var opponentChatId = currentUser.getOpponentChatId();
+        if (msg.hasPhoto()) {
+            sendPhoto(opponentChatId, msg);
+        } else if (msg.hasVideo()) {
+            sendVideo(opponentChatId, msg);
+        } else if (msg.hasAnimation()) {
+            sendAnimation(opponentChatId, msg);
+        } else if (msg.hasAudio()) {
+            sendAudio(opponentChatId, msg);
+        } else if (msg.hasVoice()) {
+            sendVoice(opponentChatId, msg);
+        } else if (msg.hasText()) {
+            sendText(opponentChatId, msg);
+        }
     }
 
     public synchronized void sendPhoto(Long opponentChatId, Message msg) {
@@ -29,8 +45,9 @@ public class MessageSender {
 
         try {
             anonChatBot.execute(photo);
+            log.info("{} sendPhoto(): Photo sent to chat ID: {}", this.getClass(), opponentChatId);
         } catch (TelegramApiException e) {
-            e.printStackTrace();
+            log.error("{} sendPhoto(): Error sending photo to chat ID: {}", this.getClass(), opponentChatId);
         }
     }
 
@@ -42,73 +59,80 @@ public class MessageSender {
                 .build();
         try {
             anonChatBot.execute(animation);
+            log.info("{} sendAnimation(): Animation sent to chat ID: {}", this.getClass(), opponentChatId);
         } catch (TelegramApiException e) {
-            e.printStackTrace();
+            log.error("{} sendAnimation(): Error sending animation to chat ID: {}", this.getClass(), opponentChatId);
         }
     }
 
     public synchronized void sendVideo(Long opponentChatId, Message msg) {
-        SendVideo forwardMessage = SendVideo.builder()
+        SendVideo video = SendVideo.builder()
                 .chatId(opponentChatId)
                 .video(new InputFile(msg.getVideo().getFileId()))
                 .caption(msg.getCaption())
                 .build();
         try {
-            anonChatBot.execute(forwardMessage);
+            anonChatBot.execute(video);
+            log.info("{} sendVideo(): Video sent to chat ID: {}", this.getClass(), opponentChatId);
         } catch (TelegramApiException e) {
-            e.printStackTrace();
+            log.error("{} sendVideo(): Error sending video to chat ID: {}", this.getClass(), opponentChatId);
         }
     }
 
     public synchronized void sendAudio(Long opponentChatId, Message msg) {
-        SendAudio forwardMessage = SendAudio.builder()
+        SendAudio audio = SendAudio.builder()
                 .chatId(opponentChatId)
                 .audio(new InputFile(msg.getAudio().getFileId()))
                 .caption(msg.getCaption())
                 .build();
         try {
-            anonChatBot.execute(forwardMessage);
+            anonChatBot.execute(audio);
+            log.info("{} sendAudio(): Audio sent to chat ID: {}", this.getClass(), opponentChatId);
         } catch (TelegramApiException e) {
-            e.printStackTrace();
+            log.error("{} sendAudio(): Error sending audio to chat ID: {}", this.getClass(), opponentChatId);
         }
     }
 
     public synchronized void sendVoice(Long opponentChatId, Message msg) {
-        SendVoice forwardMessage = SendVoice.builder()
+        SendVoice voice = SendVoice.builder()
                 .chatId(opponentChatId)
                 .voice(new InputFile(msg.getVoice().getFileId()))
                 .caption(msg.getCaption())
                 .build();
         try {
-            anonChatBot.execute(forwardMessage);
+            anonChatBot.execute(voice);
+            log.info("{} sendVoice(): Voice sent to chat ID: {}", this.getClass(), opponentChatId);
         } catch (TelegramApiException e) {
-            e.printStackTrace();
+            log.error("{} sendVoice(): Error sending voice to chat ID: {}", this.getClass(), opponentChatId);
         }
     }
 
     public synchronized void sendText(long chatId, Message msg) {
-        SendMessage message = new SendMessage(String.valueOf(chatId), msg.getText());
+        SendMessage text = new SendMessage(String.valueOf(chatId), msg.getText());
         try {
-            anonChatBot.execute(message);
+            anonChatBot.execute(text);
+            log.info("{} sendText(): Text sent to chat ID: {}", this.getClass(), chatId);
         } catch (TelegramApiException e) {
-            e.printStackTrace();
+            log.error("{} sendText(): Error sending text to chat ID: {}", this.getClass(), chatId);
         }
     }
 
-    public synchronized void sendText(long chatId, String text) {
-        SendMessage message = new SendMessage(String.valueOf(chatId), text);
+    public synchronized void sendText(long chatId, String txt) {
+        SendMessage text = new SendMessage(String.valueOf(chatId), txt);
         try {
-            anonChatBot.execute(message);
+            anonChatBot.execute(text);
+            log.info("{} sendText(): Text sent to chat ID: {}", this.getClass(), chatId);
         } catch (TelegramApiException e) {
-            e.printStackTrace();
+            log.error("{} sendText(): Error sending text to chat ID: {}", this.getClass(), chatId);
         }
     }
 
     public synchronized void sendMessage(SendMessage sendMessage) {
         try {
             anonChatBot.execute(sendMessage);
+            log.info("{} sendMessage(): Message sent to chat ID: {}", this.getClass(), sendMessage.getChatId());
         } catch (TelegramApiException e) {
-            e.printStackTrace();
+            log.error("{} sendMessage(): Error sending message to chat ID: {}", this.getClass(), sendMessage.getChatId());
         }
     }
 

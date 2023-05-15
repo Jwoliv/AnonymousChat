@@ -1,5 +1,6 @@
 package com.example.AnonymousChat.bot;
 
+import com.example.AnonymousChat.model.Report;
 import com.example.AnonymousChat.model.Session;
 import com.example.AnonymousChat.model.User;
 import com.example.AnonymousChat.service.UserService;
@@ -16,6 +17,7 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -60,65 +62,69 @@ public class AnonChatBot extends TelegramLongPollingBot {
             var text = msg.getText();
             var currentUser = userService.findByChatId(chatId);
 
-            if (currentUser.getPreviousChatId() != null) {
+            if (currentUser != null && currentUser.getPreviousChatId() != null) {
                 changeReputation(chatId, text, currentUser);
             }
 
             switch (text) {
-                case "/start" -> processingCmdStart(chatId, currentUser);
+                case "/start" -> processingCmdStart(chatId);
                 case "/new" -> newConversation(chatId);
                 case "/stop" -> stopConversation(chatId);
                 case "/share" -> processingCmdShare(currentUser, msg);
             }
-        } else if (update != null && update.hasMessage()) {
+        }
+        if (update != null && update.hasMessage()) {
             var msg = update.getMessage();
             var chatId = msg.getChatId();
             var currentUser = userService.findByChatId(chatId);
-            if (currentUser.getOpponentChatId() != null) {
-                var opponentChatId = currentUser.getOpponentChatId();
-                if (msg.hasPhoto()) {
-                    msgSender.sendPhoto(opponentChatId, msg);
-                }
-                if (msg.hasVideo()) {
-                    msgSender.sendVideo(opponentChatId, msg);
-                }
-                if (msg.hasAnimation()) {
-                    msgSender.sendAnimation(opponentChatId, msg);
-                }
-                if (msg.hasAudio()) {
-                    msgSender.sendAudio(opponentChatId, msg);
-                }
-                if (msg.hasVoice()) {
-                    msgSender.sendVoice(opponentChatId, msg);
-                }
-                if (msg.hasText()) {
-                    msgSender.sendText(opponentChatId, msg);
-                }
-            }
+            msgSender.sendBetweenUsers(currentUser, msg);
         }
     }
 
 
     private synchronized void changeReputation(Long chatId, String text, User user) {
+        if (user == null) return;
+
         var opponentChatId = user.getPreviousChatId();
         var opponent = userService.findByChatId(opponentChatId);
+
         if (opponent != null) {
             var reputation = opponent.getReputation();
-            if (text.equals("👍")) {
-                opponent.setReputation(reputation + 1);
-            } else if (text.equals("👎")) {
-                opponent.setReputation(reputation - 1);
+            switch (text) {
+                case "👍" -> {
+                    opponent.setReputation(reputation + 1);
+                    user.setPreviousChatId(null);
+                }
+                case "👎" -> {
+                    opponent.setReputation(reputation - 1);
+                    user.setPreviousChatId(null);
+                }
+                case "🚫" -> {
+                    var lists = List.of(Arrays.toString(Report.values()));
+                    KeyboardBuilder.createKeyboardOfList(lists);
+                    msgSender.sendMessage(MessageBuilder.msgOfKeyboard(chatId, MessagesText.reportMsg, lists));
+                }
+                default -> {
+                    try {
+                        Report report = Report.valueOf(text);
+                        opponent.getReports().add(report);
+                        user.getBlockUsers().add(user);
+                    } catch (Exception e) {
+                        var lists = List.of(Arrays.toString(Report.values()));
+                        msgSender.sendMessage(MessageBuilder.msgOfKeyboard(chatId, MessagesText.wrongFormatMsg, lists));
+                    }
+                }
             }
-            user.setPreviousChatId(null);
             userService.saveAll(List.of(user, opponent));
-            msgSender.sendText(chatId, "Thank you for feedback");
+            msgSender.sendText(chatId, MessagesText.thankMsg);
         }
         else {
-            msgSender.sendMessage(MessageBuilder.messageOfKeyboard(chatId, MessagesText.errorReputation, KeyboardBuilder.reputationItems));
+            msgSender.sendMessage(MessageBuilder.msgOfKeyboard(chatId, MessagesText.errorReputation, KeyboardBuilder.reputationItems));
         }
     }
 
-    private synchronized void processingCmdStart(Long chatId, User user) {
+    private synchronized void processingCmdStart(Long chatId) {
+        var user = userService.findByChatId(chatId);
         if (user == null) {
             user = User.builder().chatId(chatId).reputation(0L).build();
             userService.save(user);
@@ -133,7 +139,7 @@ public class AnonChatBot extends TelegramLongPollingBot {
             busyUsers.remove(currentUser);
         }
 
-        msgSender.sendText(chatId, "🔍 Start looking for other user");
+        msgSender.sendText(chatId, MessagesText.lookingChat);
 
         if (users.size() == 0) {
             users.add(currentUser);
@@ -183,8 +189,8 @@ public class AnonChatBot extends TelegramLongPollingBot {
                 msgSender.sendText(firstChatId, MessagesText.interruptChat);
                 msgSender.sendText(secondChatId, MessagesText.interruptChat);
 
-                msgSender.sendMessage(MessageBuilder.messageOfKeyboard(chatId, MessagesText.msgReputation, KeyboardBuilder.reputationItems));
-                msgSender.sendMessage(MessageBuilder.messageOfKeyboard(chatId, MessagesText.msgReputation, KeyboardBuilder.reputationItems));
+                msgSender.sendMessage(MessageBuilder.msgOfKeyboard(chatId, MessagesText.msgReputation, KeyboardBuilder.reputationItems));
+                msgSender.sendMessage(MessageBuilder.msgOfKeyboard(chatId, MessagesText.msgReputation, KeyboardBuilder.reputationItems));
             }
             else if (users.contains(user)) {
                 users.remove(user);

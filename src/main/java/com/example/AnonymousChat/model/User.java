@@ -30,4 +30,7 @@ public class User implements BaseEntity {
     private Long opponentChatId;
     @Transient
     private Long previousChatId;
+    @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @ToString.Exclude
+    private List<User> blockUsers = new ArrayList<>();
 }

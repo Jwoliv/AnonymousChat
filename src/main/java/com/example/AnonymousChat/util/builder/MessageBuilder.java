@@ -7,7 +7,7 @@ import java.util.List;
 
 @Component
 public class MessageBuilder {
-    public static SendMessage messageOfKeyboard(Long chatId, String title, List<String> buttons) {
+    public static SendMessage msgOfKeyboard(Long chatId, String title, List<String> buttons) {
         SendMessage sendMessage = new SendMessage();
         sendMessage.setChatId(chatId);
         sendMessage.setText(title);
