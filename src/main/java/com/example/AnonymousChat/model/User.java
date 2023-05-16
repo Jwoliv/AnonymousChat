@@ -24,11 +24,9 @@ public class User implements BaseEntity {
     private Long id;
     private Long chatId;
     private Long reputation;
-    @ElementCollection
+    @ElementCollection()
     private List<Report> reports = new ArrayList<>();
-    @Transient
     private Long opponentChatId;
-    @Transient
     private Long previousChatId;
     @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @ToString.Exclude

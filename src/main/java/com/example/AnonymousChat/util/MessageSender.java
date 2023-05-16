@@ -20,6 +20,8 @@ public class MessageSender {
 
 
     public synchronized void sendBetweenUsers(User currentUser, Message msg) {
+        if (currentUser == null || msg == null) return;
+
         var opponentChatId = currentUser.getOpponentChatId();
         if (msg.hasPhoto()) {
             sendPhoto(opponentChatId, msg);
@@ -37,6 +39,8 @@ public class MessageSender {
     }
 
     public synchronized void sendPhoto(Long opponentChatId, Message msg) {
+        if (msg == null) return;
+
         SendPhoto photo = SendPhoto.builder()
                 .chatId(opponentChatId)
                 .photo(new InputFile(msg.getPhoto().get(0).getFileId()))
@@ -52,6 +56,8 @@ public class MessageSender {
     }
 
     public synchronized void sendAnimation(Long opponentChatId, Message msg) {
+        if (msg == null) return;
+
         SendAnimation animation = SendAnimation.builder()
                 .chatId(opponentChatId)
                 .animation(new InputFile(msg.getAnimation().getFileId()))
@@ -66,6 +72,8 @@ public class MessageSender {
     }
 
     public synchronized void sendVideo(Long opponentChatId, Message msg) {
+        if (msg == null) return;
+
         SendVideo video = SendVideo.builder()
                 .chatId(opponentChatId)
                 .video(new InputFile(msg.getVideo().getFileId()))
@@ -80,6 +88,8 @@ public class MessageSender {
     }
 
     public synchronized void sendAudio(Long opponentChatId, Message msg) {
+        if (msg == null) return;
+
         SendAudio audio = SendAudio.builder()
                 .chatId(opponentChatId)
                 .audio(new InputFile(msg.getAudio().getFileId()))
@@ -94,6 +104,8 @@ public class MessageSender {
     }
 
     public synchronized void sendVoice(Long opponentChatId, Message msg) {
+        if (msg == null) return;
+
         SendVoice voice = SendVoice.builder()
                 .chatId(opponentChatId)
                 .voice(new InputFile(msg.getVoice().getFileId()))
@@ -108,6 +120,8 @@ public class MessageSender {
     }
 
     public synchronized void sendText(long chatId, Message msg) {
+        if (msg == null) return;
+
         SendMessage text = new SendMessage(String.valueOf(chatId), msg.getText());
         try {
             anonChatBot.execute(text);
