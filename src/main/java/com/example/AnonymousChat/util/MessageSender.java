@@ -22,7 +22,8 @@ public class MessageSender {
     public synchronized void sendBetweenUsers(User currentUser, Message msg) {
         if (currentUser == null || msg == null) return;
 
-        var opponentChatId = currentUser.getOpponentChatId();
+        var opponentChatId = currentUser.decryptOpponentChatId();
+
         if (msg.hasPhoto()) {
             sendPhoto(opponentChatId, msg);
         } else if (msg.hasVideo()) {
@@ -53,6 +54,11 @@ public class MessageSender {
         } catch (TelegramApiException e) {
             log.error("{} sendPhoto(): Error sending photo to chat ID: {}", this.getClass(), opponentChatId);
         }
+    }
+
+    public synchronized void sendMessageForTwoUsers(Long chatIdFirst, Long chatIdSecond, String messageText) {
+        sendText(chatIdFirst, messageText);
+        sendText(chatIdSecond, messageText);
     }
 
     public synchronized void sendAnimation(Long opponentChatId, Message msg) {

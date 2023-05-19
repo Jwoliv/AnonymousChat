@@ -12,6 +12,7 @@ public class MessagesText {
                     """;
     public final static String interruptChat = "🚫 The chat was interrupted";
     public final static String stopChat = "✅ Chat was stopped";
+    public final static String stopLookingForChat = "✅ The looking for chat was stopped";
     public final static String errorChat = "👀 Your is not in the chat! 😕";
     public final static String startChat = "✅ Start chat";
     public final static String lookingChat = "🔍 Start looking for other user";

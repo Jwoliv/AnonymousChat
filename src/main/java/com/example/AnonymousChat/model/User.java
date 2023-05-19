@@ -1,5 +1,6 @@
 package com.example.AnonymousChat.model;
 
+import com.example.AnonymousChat.util.AesCrypt;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.stereotype.Component;
@@ -26,9 +27,31 @@ public class User implements BaseEntity {
     private Long reputation;
     @ElementCollection()
     private List<Report> reports = new ArrayList<>();
-    private Long opponentChatId;
-    private Long previousChatId;
+    private String opponentChatId;
+    private String previousChatId;
     @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @ToString.Exclude
     private List<User> blockUsers = new ArrayList<>();
+
+
+    public Long decryptOpponentChatId() {
+        var strOpponentChatId = this.getOpponentChatId();
+        if (strOpponentChatId != null) {
+            return Long.parseLong(AesCrypt.decrypt(strOpponentChatId));
+        }
+        return null;
+    }
+
+    public Long decryptPreviousChatId() {
+        var previousChatId = this.getPreviousChatId();
+        if (previousChatId != null) {
+            return Long.parseLong(AesCrypt.decrypt(previousChatId));
+        }
+        return null;
+    }
+
+    public String encryptOwnChatId() {
+        var chatId = this.getChatId();
+        return AesCrypt.encrypt(String.valueOf(chatId));
+    }
 }

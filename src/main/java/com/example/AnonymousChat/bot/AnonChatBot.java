@@ -1,7 +1,6 @@
 package com.example.AnonymousChat.bot;
 
 import com.example.AnonymousChat.model.Report;
-import com.example.AnonymousChat.model.Session;
 import com.example.AnonymousChat.model.User;
 import com.example.AnonymousChat.service.UserService;
 import com.example.AnonymousChat.util.MessageSender;
@@ -38,7 +37,6 @@ public class AnonChatBot extends TelegramLongPollingBot {
     //region collections
     private final Set<User> users = new ConcurrentSkipListSet<>(new UserComparator());
     private final Set<User> busyUsers = new CopyOnWriteArraySet<>();
-    private final Set<Session> sessions = new CopyOnWriteArraySet<>();
     //endregion collections
 
     //region services
@@ -69,25 +67,27 @@ public class AnonChatBot extends TelegramLongPollingBot {
                     changeReputationOrBlock(chatId, text, currentUser);
                 }
 
+
                 switch (text) {
                     case "/start" -> processingCmdStart(chatId);
                     case "/new" -> newConversation(chatId);
                     case "/stop" -> stopConversation(chatId);
                     case "/share" -> processingCmdShare(currentUser, msg);
                     case "/info" -> processingCmdInfo(currentUser);
-                    default -> {
-                        if (currentUser != null && currentUser.getOpponentChatId() != null) {
-                            if (msg.hasText()) {
-                                var opponentChatId = currentUser.getOpponentChatId();
-                                msgSender.sendText(opponentChatId, msg);
-                            }
-                        }
-                    }
+
+                    default -> sendTextBetweenUsers(currentUser, msg);
                 }
             }
             else if (currentUser != null && currentUser.getOpponentChatId() != null) {
                 msgSender.sendBetweenUsers(currentUser, msg);
             }
+        }
+    }
+
+    private synchronized void sendTextBetweenUsers(User currentUser, Message msg) {
+        if (currentUser != null && currentUser.getOpponentChatId() != null && msg.hasText()) {
+            var opponentChatId = currentUser.decryptOpponentChatId();
+            msgSender.sendText(opponentChatId, msg);
         }
     }
 
@@ -103,7 +103,7 @@ public class AnonChatBot extends TelegramLongPollingBot {
     private synchronized void changeReputationOrBlock(Long chatId, String text, User user) {
         if (user == null) return;
 
-        var opponentChatId = user.getPreviousChatId();
+        var opponentChatId = user.decryptPreviousChatId();
         var opponent = userService.findByChatId(opponentChatId);
 
         if (opponent != null) {
@@ -112,10 +112,12 @@ public class AnonChatBot extends TelegramLongPollingBot {
                 case "👍" -> {
                     opponent.setReputation(reputation + 1);
                     user.setPreviousChatId(null);
+                    msgSender.sendText(chatId, MessagesText.startChat);
                 }
                 case "👎" -> {
                     opponent.setReputation(reputation - 1);
                     user.setPreviousChatId(null);
+                    msgSender.sendText(chatId, MessagesText.startChat);
                 }
                 case "🚫" -> {
                     var list = Arrays.stream(Report.values())
@@ -127,7 +129,10 @@ public class AnonChatBot extends TelegramLongPollingBot {
 
                     msgSender.sendMessage(MessageBuilder.msgOfKeyboard(chatId, MessagesText.reportMsg, stringList));
                 }
-                case "🙅‍♂️" -> user.getBlockUsers().add(opponent);
+                case "🙅‍♂️" -> {
+                    user.getBlockUsers().add(opponent);
+                    msgSender.sendText(chatId, MessagesText.startChat);
+                }
                 default -> {
                     try {
                         if (!user.getBlockUsers().contains(opponent)) {
@@ -173,7 +178,7 @@ public class AnonChatBot extends TelegramLongPollingBot {
 
     private synchronized void newConversation(Long chatId) {
         var currentUser = userService.findByChatId(chatId);
-        if (busyUsers.contains(currentUser)) {
+        if (users.contains(currentUser)) {
             users.removeIf(x -> x.getChatId().equals(chatId));
             busyUsers.remove(currentUser);
         }
@@ -184,26 +189,22 @@ public class AnonChatBot extends TelegramLongPollingBot {
             users.add(currentUser);
         } else {
             var opponent = users.stream().findFirst().orElse(null);
-            Session session = Session.builder().firstUser(currentUser).secondUser(opponent).build();
 
-            currentUser.setOpponentChatId(opponent.getChatId());
-            opponent.setOpponentChatId(currentUser.getChatId());
+            currentUser.setOpponentChatId(opponent.encryptOwnChatId());
+            opponent.setOpponentChatId(currentUser.encryptOwnChatId());
 
             userService.saveAll(List.of(currentUser, opponent));
-
             users.remove(opponent);
-            sessions.add(session);
             busyUsers.addAll(List.of(currentUser, opponent));
 
-            msgSender.sendText(currentUser.getChatId(), MessagesText.startChat);
-            msgSender.sendText(opponent.getChatId(), MessagesText.startChat);
+            msgSender.sendMessageForTwoUsers(currentUser.getChatId(), opponent.getChatId(), MessagesText.startChat);
         }
     }
 
     private synchronized void stopConversation(Long chatId) {
         var user = userService.findByChatId(chatId);
         if (user != null) {
-            var opponentId = user.getOpponentChatId();
+            var opponentId = user.decryptOpponentChatId();
 
             if (opponentId != null) {
 
@@ -220,15 +221,15 @@ public class AnonChatBot extends TelegramLongPollingBot {
 
                 var firstChatId = firstUser.getChatId();
                 var secondChatId = secondUser.getChatId();
-                msgSender.sendText(firstChatId, MessagesText.interruptChat);
-                msgSender.sendText(secondChatId, MessagesText.interruptChat);
+
+                msgSender.sendMessageForTwoUsers(firstChatId, secondChatId, MessagesText.interruptChat);
 
                 msgSender.sendMessage(MessageBuilder.msgOfKeyboard(chatId, MessagesText.msgReputation, KeyboardBuilder.reputationItems));
                 msgSender.sendMessage(MessageBuilder.msgOfKeyboard(opponentId, MessagesText.msgReputation, KeyboardBuilder.reputationItems));
             }
             else if (users.contains(user)) {
                 users.remove(user);
-                msgSender.sendText(chatId, MessagesText.stopChat);
+                msgSender.sendText(chatId, MessagesText.stopLookingForChat);
             }
             else {
                 msgSender.sendText(chatId, MessagesText.errorChat);
@@ -241,7 +242,7 @@ public class AnonChatBot extends TelegramLongPollingBot {
             if (currentUser.getOpponentChatId() != null) {
                 var username = msg.getFrom().getUserName();
                 msgSender.sendText(
-                        currentUser.getOpponentChatId(),
+                        currentUser.decryptOpponentChatId(),
                         String.format("""
                                 🔥 The user shared own username:
                                 😎 It's a @%s
