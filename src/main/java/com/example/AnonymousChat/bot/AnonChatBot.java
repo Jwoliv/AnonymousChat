@@ -16,12 +16,13 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardRemove;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.CopyOnWriteArraySet;
 
 
 @Component
@@ -36,7 +37,6 @@ public class AnonChatBot extends TelegramLongPollingBot {
 
     //region collections
     private final Set<User> users = new ConcurrentSkipListSet<>(new UserComparator());
-    private final Set<User> busyUsers = new CopyOnWriteArraySet<>();
     //endregion collections
 
     //region services
@@ -96,7 +96,7 @@ public class AnonChatBot extends TelegramLongPollingBot {
 
         var chatId = user.getChatId();
         var reputation = user.getReputation();
-        var info = String.format(MessagesText.infoMsg, chatId, reputation);
+        var info = String.format(MessagesText.INFO_MESSAGE, chatId, reputation);
         msgSender.sendText(chatId, info);
     }
 
@@ -112,12 +112,12 @@ public class AnonChatBot extends TelegramLongPollingBot {
                 case "👍" -> {
                     opponent.setReputation(reputation + 1);
                     user.setPreviousChatId(null);
-                    msgSender.sendText(chatId, MessagesText.startChat);
+                    msgSender.sendText(chatId, MessagesText.THANK_YOU_FOR_FEEDBACK);
                 }
                 case "👎" -> {
                     opponent.setReputation(reputation - 1);
                     user.setPreviousChatId(null);
-                    msgSender.sendText(chatId, MessagesText.startChat);
+                    msgSender.sendText(chatId, MessagesText.THANK_YOU_FOR_FEEDBACK);
                 }
                 case "🚫" -> {
                     var list = Arrays.stream(Report.values())
@@ -127,11 +127,12 @@ public class AnonChatBot extends TelegramLongPollingBot {
                             .map(Enum::name)
                             .toList();
 
-                    msgSender.sendMessage(MessageBuilder.msgOfKeyboard(chatId, MessagesText.reportMsg, stringList));
+                    msgSender.sendMessage(MessageBuilder.msgOfKeyboard(chatId, MessagesText.REPORTS_OF_THE_USER, stringList));
                 }
                 case "🙅‍♂️" -> {
                     user.getBlockUsers().add(opponent);
-                    msgSender.sendText(chatId, MessagesText.startChat);
+                    user.setPreviousChatId(null);
+                    msgSender.sendText(chatId, MessagesText.THANK_YOU_FOR_FEEDBACK);
                 }
                 default -> {
                     try {
@@ -150,20 +151,19 @@ public class AnonChatBot extends TelegramLongPollingBot {
                                 .map(Enum::name)
                                 .toList();
 
-                        msgSender.sendMessage(MessageBuilder.msgOfKeyboard(chatId, MessagesText.wrongFormatMsg, stringList));
+                        msgSender.sendMessage(MessageBuilder.msgOfKeyboard(chatId, MessagesText.WRONG_FORMAT_OF_THE_REPORT_PLEASE_TRY_AGAIN, stringList));
                     }
                 }
             }
             userService.saveAll(List.of(user, opponent));
 
-            SendMessage message = new SendMessage();
-            message.setChatId(chatId);
-            message.setText(MessagesText.thankMsg);
-            message.setReplyMarkup(null);
+            SendMessage message = new SendMessage(String.valueOf(chatId), MessagesText.THANK_YOU_FOR_FEEDBACK);
+            message.setReplyMarkup(new ReplyKeyboardRemove());
+
             msgSender.sendMessage(message);
         }
         else {
-            msgSender.sendMessage(MessageBuilder.msgOfKeyboard(chatId, MessagesText.errorReputation, KeyboardBuilder.reputationItems));
+            msgSender.sendMessage(MessageBuilder.msgOfKeyboard(chatId, MessagesText.WRONG_FORMAT_OF_ASSESSMENT_PLEASE_TRY_AGAIN, KeyboardBuilder.reputationItems));
         }
     }
 
@@ -173,31 +173,44 @@ public class AnonChatBot extends TelegramLongPollingBot {
             user = User.builder().chatId(chatId).reputation(0L).build();
             userService.save(user);
         }
-        msgSender.sendText(chatId, MessagesText.startMessage);
+        msgSender.sendText(chatId, MessagesText.START_MESSAGE);
     }
 
     private synchronized void newConversation(Long chatId) {
         var currentUser = userService.findByChatId(chatId);
-        if (users.contains(currentUser)) {
-            users.removeIf(x -> x.getChatId().equals(chatId));
-            busyUsers.remove(currentUser);
-        }
+        if (users.contains(currentUser)) users.removeIf(x -> x.getChatId().equals(chatId));
 
-        msgSender.sendText(chatId, MessagesText.lookingChat);
+        msgSender.sendText(chatId, MessagesText.LOOKING_FOR_OTHER_USER);
 
         if (users.size() == 0) {
             users.add(currentUser);
         } else {
-            var opponent = users.stream().findFirst().orElse(null);
+            var availUsers = new ConcurrentSkipListSet<>(new UserComparator());
+            while (!users.isEmpty()) {
+                if (availUsers.size() == 0) {
+                    availUsers = new ConcurrentSkipListSet<>(new UserComparator());
+                    availUsers.addAll(users);
+                }
+                else {
+                    var opponent = availUsers.pollFirst();
+                    if (opponent != null) {
+                        List<User> blockedUsers = new ArrayList<>();
+                        blockedUsers.addAll(currentUser.getBlockUsers());
+                        blockedUsers.addAll(opponent.getBlockUsers());
 
-            currentUser.setOpponentChatId(opponent.encryptOwnChatId());
-            opponent.setOpponentChatId(currentUser.encryptOwnChatId());
+                        var blockedUserId = blockedUsers.stream().map(User::getId).toList();
 
-            userService.saveAll(List.of(currentUser, opponent));
-            users.remove(opponent);
-            busyUsers.addAll(List.of(currentUser, opponent));
-
-            msgSender.sendMessageForTwoUsers(currentUser.getChatId(), opponent.getChatId(), MessagesText.startChat);
+                        if (!blockedUserId.contains(currentUser.getId()) && !blockedUserId.contains(opponent.getId())) {
+                            currentUser.setOpponentChatId(opponent.encryptOwnChatId());
+                            opponent.setOpponentChatId(currentUser.encryptOwnChatId());
+                            userService.saveAll(List.of(currentUser, opponent));
+                            users.remove(opponent);
+                            msgSender.sendMessageForTwoUsers(currentUser.getChatId(), opponent.getChatId(), MessagesText.START_CHAT);
+                            break;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -222,17 +235,17 @@ public class AnonChatBot extends TelegramLongPollingBot {
                 var firstChatId = firstUser.getChatId();
                 var secondChatId = secondUser.getChatId();
 
-                msgSender.sendMessageForTwoUsers(firstChatId, secondChatId, MessagesText.interruptChat);
+                msgSender.sendMessageForTwoUsers(firstChatId, secondChatId, MessagesText.STOP_CHAT);
 
-                msgSender.sendMessage(MessageBuilder.msgOfKeyboard(chatId, MessagesText.msgReputation, KeyboardBuilder.reputationItems));
-                msgSender.sendMessage(MessageBuilder.msgOfKeyboard(opponentId, MessagesText.msgReputation, KeyboardBuilder.reputationItems));
+                msgSender.sendMessage(MessageBuilder.msgOfKeyboard(chatId, MessagesText.RATER_CHAT_WITH_THIS_OPPONENT, KeyboardBuilder.reputationItems));
+                msgSender.sendMessage(MessageBuilder.msgOfKeyboard(opponentId, MessagesText.RATER_CHAT_WITH_THIS_OPPONENT, KeyboardBuilder.reputationItems));
             }
             else if (users.contains(user)) {
                 users.remove(user);
-                msgSender.sendText(chatId, MessagesText.stopLookingForChat);
+                msgSender.sendText(chatId, MessagesText.LOOKING_FOR_CHAT_WAS_STOPPED);
             }
             else {
-                msgSender.sendText(chatId, MessagesText.errorChat);
+                msgSender.sendText(chatId, MessagesText.ERROR_CHAT);
             }
         }
     }
