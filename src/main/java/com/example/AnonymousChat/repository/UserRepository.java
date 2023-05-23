@@ -1,6 +1,6 @@
 package com.example.AnonymousChat.repository;
 
-import com.example.AnonymousChat.model.User;
+import com.example.AnonymousChat.model.user.User;
 import org.springframework.stereotype.Repository;
 
 @Repository

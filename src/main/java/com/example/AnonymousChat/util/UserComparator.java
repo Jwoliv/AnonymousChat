@@ -1,6 +1,6 @@
 package com.example.AnonymousChat.util;
 
-import com.example.AnonymousChat.model.User;
+import com.example.AnonymousChat.model.user.User;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;

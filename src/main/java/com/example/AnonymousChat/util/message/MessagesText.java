@@ -1,4 +1,4 @@
-package com.example.AnonymousChat.util;
+package com.example.AnonymousChat.util.message;
 
 public class MessagesText {
     public final static String RATER_CHAT_WITH_THIS_OPPONENT = "How do you can to rater chat with this opponent? 😊";

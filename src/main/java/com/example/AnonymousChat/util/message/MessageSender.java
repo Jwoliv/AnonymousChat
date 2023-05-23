@@ -1,7 +1,7 @@
-package com.example.AnonymousChat.util;
+package com.example.AnonymousChat.util.message;
 
 import com.example.AnonymousChat.bot.AnonChatBot;
-import com.example.AnonymousChat.model.User;
+import com.example.AnonymousChat.model.user.User;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.*;

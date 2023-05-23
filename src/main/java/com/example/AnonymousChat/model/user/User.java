@@ -1,5 +1,6 @@
-package com.example.AnonymousChat.model;
+package com.example.AnonymousChat.model.user;
 
+import com.example.AnonymousChat.model.BaseEntity;
 import com.example.AnonymousChat.util.AesCrypt;
 import jakarta.persistence.*;
 import lombok.*;

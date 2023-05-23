@@ -1,4 +1,4 @@
-package com.example.AnonymousChat.model;
+package com.example.AnonymousChat.model.user;
 
 public enum Report {
     SALES("Sales Report"),
